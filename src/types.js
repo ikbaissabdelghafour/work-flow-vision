@@ -3,7 +3,7 @@
 // It contains JSDoc comments to provide type information for editors that support it
 
 /**
- * @typedef {'admin' | 'client'} UserRole
+ * @typedef {'admin' | 'employee'} UserRole
  */
 
 /**
