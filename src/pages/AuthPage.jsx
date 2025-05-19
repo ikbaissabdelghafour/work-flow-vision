@@ -14,25 +14,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const AuthPage = () => {
-  const [email, setEmail] = useState("admin@example.com");
-  const [password, setPassword] = useState("admin123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [userType, setUserType] = useState("admin");
   const { login, isAuthenticated } = useAuth();
-
-  const handleUserTypeChange = (type) => {
-    setUserType(type);
-    if (type === "admin") {
-      setEmail("admin@example.com");
-      setPassword("admin123");
-    } else {
-      setEmail("employee@example.com");
-      setPassword("employee123");
-    }
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -41,7 +28,7 @@ const AuthPage = () => {
     try {
       const success = await login(email, password);
       if (!success) {
-        toast.error("Identifiants incorrects", {
+        toast.error("Identifiants invalides", {
           description: "Veuillez vérifier votre email et mot de passe.",
         });
       } else {
@@ -52,7 +39,7 @@ const AuthPage = () => {
     } catch (error) {
       console.error("Login error:", error);
       toast.error("Erreur de connexion", {
-        description: "Une erreur s'est produite lors de la connexion.",
+        description: "Une erreur est survenue lors de la connexion.",
       });
     } finally {
       setIsLoading(false);
@@ -72,117 +59,56 @@ const AuthPage = () => {
             <span className="text-white font-bold text-xl">WV</span>
           </div>
           <h1 className="mt-3 text-3xl font-bold">WorkFlow Vision</h1>
-          <p className="mt-2 text-gray-500">Choisissez un rôle pour vous connecter</p>
+          <p className="mt-2 text-gray-500">Connectez-vous à votre compte</p>
         </div>
         
         <Card>
           <CardHeader>
             <CardTitle>Connexion</CardTitle>
             <CardDescription>
-              Choisissez votre rôle et connectez-vous
+              Entrez vos identifiants pour accéder à votre compte
             </CardDescription>
           </CardHeader>
-          
-          <Tabs defaultValue="admin" onValueChange={handleUserTypeChange}>
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="admin">Admin</TabsTrigger>
-              <TabsTrigger value="employee">Employé</TabsTrigger>
-            </TabsList>
+          <form onSubmit={handleSubmit}>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="votre@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Mot de passe</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
+            </CardContent>
             
-            <TabsContent value="admin">
-              <form onSubmit={handleSubmit}>
-                <CardContent className="space-y-4 pt-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="admin@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="password">Mot de passe</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="bg-blue-50 p-3 rounded-md border border-blue-100 text-sm">
-                    <p className="font-medium text-blue-700">Identifiants Admin (Pré-remplis)</p>
-                    <p className="text-blue-600">Email: admin@example.com</p>
-                    <p className="text-blue-600">Mot de passe: admin123</p>
-                    <p className="mt-1 text-blue-500 text-xs">Cliquez sur Connexion pour continuer</p>
-                  </div>
-                </CardContent>
-                
-                <CardFooter>
-                  <Button
-                    type="submit"
-                    disabled={isLoading}
-                    className="w-full"
-                  >
-                    {isLoading ? "Connexion en cours..." : "Connexion"}
-                  </Button>
-                </CardFooter>
-              </form>
-            </TabsContent>
-            
-            <TabsContent value="employee">
-              <form onSubmit={handleSubmit}>
-                <CardContent className="space-y-4 pt-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="employee@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="password">Mot de passe</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="bg-blue-50 p-3 rounded-md border border-blue-100 text-sm">
-                    <p className="font-medium text-blue-700">Identifiants Employé (Pré-remplis)</p>
-                    <p className="text-blue-600">Email: employee@example.com</p>
-                    <p className="text-blue-600">Mot de passe: employee123</p>
-                    <p className="mt-1 text-blue-500 text-xs">Cliquez sur Connexion pour continuer</p>
-                  </div>
-                </CardContent>
-                
-                <CardFooter>
-                  <Button
-                    type="submit"
-                    disabled={isLoading}
-                    className="w-full"
-                  >
-                    {isLoading ? "Connexion en cours..." : "Connexion"}
-                  </Button>
-                </CardFooter>
-              </form>
-            </TabsContent>
-          </Tabs>
+            <CardFooter>
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className="w-full"
+              >
+                {isLoading ? "Connexion en cours..." : "Se connecter"}
+              </Button>
+            </CardFooter>
+          </form>
         </Card>
         
         <div className="text-center text-sm text-gray-500">
-          <p>Ceci est une application de démonstration avec des services API simulés.</p>
+          <p>Pour tester l'API Laravel, vous devrez configurer le backend et créer un utilisateur.</p>
         </div>
       </div>
     </div>
