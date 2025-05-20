@@ -14,7 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Mail, Lock, LogIn } from "lucide-react";
+import { Mail, Lock, LogIn, ArrowRight } from "lucide-react";
 
 const AuthPage = () => {
   const [email, setEmail] = useState("");
@@ -53,36 +53,40 @@ const AuthPage = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4">
-      <div className="w-full max-w-md space-y-6 animate-fade-in">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-page p-4 overflow-hidden">
+      <div className="absolute inset-0 bg-cover bg-center opacity-5" style={{backgroundImage: "url('https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&q=80')"}}></div>
+      
+      <div className="w-full max-w-md space-y-8 animate-fade-in relative z-10">
         <div className="text-center">
-          <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-indigo flex items-center justify-center shadow-lg">
-            <span className="text-white font-bold text-2xl">WV</span>
+          <div className="mx-auto w-20 h-20 rounded-2xl bg-gradient-indigo flex items-center justify-center shadow-lg animate-float">
+            <span className="text-white font-bold text-3xl">WV</span>
           </div>
-          <h1 className="mt-4 text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">WorkFlow Vision</h1>
+          <h1 className="mt-6 text-4xl font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-700 bg-clip-text text-transparent">
+            WorkFlow Vision
+          </h1>
           <p className="mt-2 text-gray-500">Connectez-vous à votre compte</p>
         </div>
         
         <Card className="glass-effect border-opacity-40 shadow-xl">
-          <CardHeader className="space-y-1">
+          <CardHeader className="space-y-2">
             <CardTitle className="text-2xl text-center">Connexion</CardTitle>
             <CardDescription className="text-center">
               Entrez vos identifiants pour accéder à votre compte
             </CardDescription>
           </CardHeader>
           <form onSubmit={handleSubmit} className="animate-slide-in">
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-5">
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm font-medium">Email</Label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-2.5 h-5 w-5 text-muted-foreground" />
+                  <Mail className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
                   <Input
                     id="email"
                     type="email"
                     placeholder="votre@email.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="pl-10"
+                    className="pl-11"
                     required
                   />
                 </div>
@@ -90,26 +94,32 @@ const AuthPage = () => {
               <div className="space-y-2">
                 <Label htmlFor="password" className="text-sm font-medium">Mot de passe</Label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-2.5 h-5 w-5 text-muted-foreground" />
+                  <Lock className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
                   <Input
                     id="password"
                     type="password"
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10"
+                    className="pl-11"
                     required
                   />
+                </div>
+                <div className="text-right">
+                  <a href="#" className="text-sm text-blue-600 hover:text-blue-800 hover:underline">
+                    Mot de passe oublié?
+                  </a>
                 </div>
               </div>
             </CardContent>
             
-            <CardFooter>
+            <CardFooter className="flex flex-col space-y-4">
               <Button
                 type="submit"
                 disabled={isLoading}
                 className="w-full font-medium"
                 variant="gradient"
+                size="lg"
               >
                 {isLoading ? (
                   <span className="flex items-center gap-2">
@@ -126,11 +136,18 @@ const AuthPage = () => {
                   </span>
                 )}
               </Button>
+              
+              <div className="text-center">
+                <span className="text-sm text-gray-500">Vous n'avez pas de compte? </span>
+                <Button variant="link" className="p-0 h-auto text-blue-600 hover:text-blue-800">
+                  Créer un compte
+                </Button>
+              </div>
             </CardFooter>
           </form>
         </Card>
         
-        <div className="text-center text-sm text-gray-500 animate-fade-in" style={{animationDelay: "0.2s"}}>
+        <div className="text-center text-sm text-gray-500 animate-fade-in mt-4 p-3 bg-white/50 rounded-xl backdrop-blur-sm" style={{animationDelay: "0.2s"}}>
           <p>Demo: email: demo@example.com / password: password</p>
         </div>
       </div>

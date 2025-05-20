@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useAuth } from '@/context/AuthContext';
 import AppHeader from './AppHeader';
@@ -15,8 +16,10 @@ const AppLayout = ({ children }) => {
           <AppSidebar />
           <div className="flex-1 flex flex-col">
             <AppHeader />
-            <main className="flex-1 bg-slate-50 p-6">
-              {children}
+            <main className="flex-1 bg-slate-50 p-6 overflow-auto">
+              <div className="container max-w-7xl mx-auto">
+                {children}
+              </div>
             </main>
           </div>
         </div>
