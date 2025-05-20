@@ -19,7 +19,7 @@ function useChart() {
   return context
 }
 
-const ChartContainer = React.forwardRef(({ id, className, children, config, ...props }, ref) => {
+const ChartContainer = React.forwardRef(({ id, className, children, config = {}, ...props }, ref) => {
   const uniqueId = React.useId()
   const chartId = `chart-${id || uniqueId.replace(/:/g, "")}`
 
@@ -46,7 +46,7 @@ ChartContainer.displayName = "Chart"
 
 const ChartStyle = ({ id, config }) => {
   const colorConfig = Object.entries(config).filter(
-    ([_, config]) => config.theme || config.color
+    ([_, config]) => config && (config.theme || config.color)
   )
 
   if (!colorConfig.length) {
@@ -67,6 +67,7 @@ ${colorConfig
       itemConfig.color
     return color ? `  --color-${key}: ${color};` : null
   })
+  .filter(Boolean)
   .join("\n")}
 }
 `
@@ -95,11 +96,61 @@ const ChartTooltipContent = React.forwardRef(
       color,
       nameKey,
       labelKey,
+      ...props
     },
     ref
   ) => {
-    // Implementation omitted for brevity - would need to be completed based on requirements
-    return null
+    if (!active || !payload || !payload.length) {
+      return null;
+    }
+
+    const formattedLabel = labelFormatter ? labelFormatter(label) : label;
+
+    return (
+      <div
+        ref={ref}
+        className={cn(
+          "rounded-lg border bg-background p-2 shadow-md",
+          className
+        )}
+        {...props}
+      >
+        {!hideLabel && formattedLabel && (
+          <div className={cn("mb-1 font-medium", labelClassName)}>
+            {formattedLabel}
+          </div>
+        )}
+        <div className="flex flex-col gap-0.5">
+          {payload.map((item, index) => {
+            const formattedValue = formatter
+              ? formatter(item.value, item.name, item, index)
+              : item.value;
+
+            const itemName = nameKey ? item.payload[nameKey] : item.name;
+            const itemLabel = labelKey ? item.payload[labelKey] : formattedValue;
+
+            return (
+              <div key={`${item.name}-${index}`} className="flex items-center gap-2">
+                {!hideIndicator && (
+                  <div
+                    className={cn(
+                      "h-2 w-2 rounded-full",
+                      indicator === "dot" ? "rounded-full" : "h-2 w-3"
+                    )}
+                    style={{
+                      backgroundColor:
+                        color || item.color || "var(--color-tooltip-indicator)",
+                    }}
+                  />
+                )}
+                <span className="font-medium">{itemName}:</span>
+                <span className="text-muted-foreground">{itemLabel}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
   }
 )
 ChartTooltipContent.displayName = "ChartTooltipContent"
