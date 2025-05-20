@@ -25,7 +25,7 @@ import {
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 
-const Dashboard: React.FC = () => {
+const Dashboard = () => {
   const { currentUser } = useAuth();
   const { 
     projects = [], 
@@ -75,7 +75,7 @@ const Dashboard: React.FC = () => {
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 5);
   
-  const getStatusBadgeClass = (status: string) => {
+  const getStatusBadgeClass = (status) => {
     switch (status) {
       case "todo":
         return "status-badge status-todo";
@@ -88,7 +88,7 @@ const Dashboard: React.FC = () => {
     }
   };
   
-  const getStatusLabel = (status: string) => {
+  const getStatusLabel = (status) => {
     switch (status) {
       case "todo":
         return "To Do";
