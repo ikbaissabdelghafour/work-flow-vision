@@ -1,9 +1,11 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { useState, useEffect, createContext } from "react";
 import { AppState, Project, Task, Employee, Team, TaskStatus } from "../types";
-import { mockProjects, mockTasks, mockEmployees, mockTeams } from "../mockData";
+import { teamsApi, employeesApi, projectsApi, tasksApi } from "../lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "./AuthContext";
+import { createContextHook } from "@/lib/contextUtils";
 
+// Define the app context type
 interface AppContextType extends AppState {
   addTask: (task: Omit<Task, "id" | "createdAt">) => void;
   updateTask: (taskId: string, updates: Partial<Task>) => void;
@@ -30,18 +32,62 @@ interface AppContextType extends AppState {
   getProjectsByTeam: (teamId: string) => Project[];
   
   calculateProjectCost: (projectId: string) => number;
+  isLoading: boolean;
 }
 
+// Create the context
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+// Create the hook
+export const useApp = createContextHook(AppContext, 'useApp');
+
+// Create the provider
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [projects, setProjects] = useState<Project[]>(mockProjects);
-  const [tasks, setTasks] = useState<Task[]>(mockTasks);
-  const [employees, setEmployees] = useState<Employee[]>(mockEmployees);
-  const [teams, setTeams] = useState<Team[]>(mockTeams);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   
   const { toast } = useToast();
   const { currentUser } = useAuth();
+
+  // Fetch data when user is authenticated
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!currentUser) return;
+      
+      const token = localStorage.getItem("auth_token");
+      if (!token) return;
+      
+      setIsLoading(true);
+      try {
+        // Fetch all data in parallel
+        const [teamsData, employeesData, projectsData, tasksData] = await Promise.all([
+          teamsApi.getAll(token),
+          employeesApi.getAll(token),
+          projectsApi.getAll(token),
+          tasksApi.getAll(token)
+        ]);
+        
+        setTeams(teamsData);
+        setEmployees(employeesData);
+        setProjects(projectsData);
+        setTasks(tasksData);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load data. Please try again.",
+          variant: "destructive"
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, [currentUser, toast]);
 
   // Generate a new ID (in a real app would be handled by the backend)
   const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -167,107 +213,148 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Team operations
-  const addTeam = (team: Omit<Team, "id">) => {
-    const newTeam: Team = {
-      ...team,
-      id: generateId(),
-      employeeIds: team.employeeIds || [],
-    };
-    
-    setTeams(prev => [...prev, newTeam]);
-    
-    toast({
-      title: "Team Created",
-      description: `Team "${newTeam.name}" has been created.`
-    });
+  const addTeam = async (team: Omit<Team, "id">) => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
+
+    try {
+      const newTeam = await teamsApi.create(team, token);
+      setTeams(prev => [...prev, newTeam]);
+
+      toast({
+        title: "Team Created",
+        description: `Team "${newTeam.name}" has been created.`
+      });
+    } catch (error) {
+      console.error("Error creating team:", error);
+      toast({
+        title: "Error",
+        description: "Failed to create team. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   // Employee operations
-  const addEmployee = (employee: Omit<Employee, "id">) => {
-    const newEmployee: Employee = {
+  const addEmployee = async (employee: Omit<Employee, "id">) => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
+
+    // Generate avatar if not provided
+    const employeeWithAvatar = {
       ...employee,
-      id: generateId(),
+      avatar: employee.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${employee.name.toLowerCase().replace(/\s/g, '')}`
     };
-    
-    setEmployees(prev => [...prev, newEmployee]);
-    
-    // Update the associated team
-    setTeams(prev => 
-      prev.map(team => 
-        team.id === employee.teamId 
-          ? { ...team, employeeIds: [...team.employeeIds, newEmployee.id] } 
-          : team
-      )
-    );
-    
-    toast({
-      title: "Employee Added",
-      description: `${newEmployee.name} has been added to the team.`
-    });
+
+    try {
+      const newEmployee = await employeesApi.create(employeeWithAvatar, token);
+      setEmployees(prev => [...prev, newEmployee]);
+
+      // Update teams in local state to reflect the new employee
+      // This is needed because our API might not return the updated team immediately
+      if (newEmployee.team_id) {
+        const teamId = newEmployee.team_id.toString();
+        setTeams(prev =>
+          prev.map(team =>
+            team.id === teamId
+              ? { ...team, employeeIds: [...(team.employeeIds || []), newEmployee.id] }
+              : team
+          )
+        );
+      }
+
+      toast({
+        title: "Employee Added",
+        description: `${newEmployee.name} has been added to the team.`
+      });
+    } catch (error) {
+      console.error("Error creating employee:", error);
+      toast({
+        title: "Error",
+        description: "Failed to add employee. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
-  const updateEmployee = (employeeId: string, updates: Partial<Employee>) => {
-    // Check if team is changing
-    const employeeToUpdate = employees.find(e => e.id === employeeId);
-    const isTeamChanging = employeeToUpdate && updates.teamId && updates.teamId !== employeeToUpdate.teamId;
-    
-    // Update employee
-    setEmployees(prev => 
-      prev.map(employee => 
-        employee.id === employeeId ? { ...employee, ...updates } : employee
-      )
-    );
+  const updateEmployee = async (employeeId: string, updates: Partial<Employee>) => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
 
-    // Handle team changes if needed
-    if (isTeamChanging && employeeToUpdate && updates.teamId) {
-      // Remove from old team
-      setTeams(prev => 
-        prev.map(team => 
-          team.id === employeeToUpdate.teamId 
-            ? { ...team, employeeIds: team.employeeIds.filter(id => id !== employeeId) } 
-            : team
+    try {
+      // Convert string ID to number for API
+      const numericId = parseInt(employeeId);
+      if (isNaN(numericId)) throw new Error("Invalid employee ID");
+      
+      const updatedEmployee = await employeesApi.update(numericId, updates, token);
+      
+      // Update local state
+      setEmployees(prev => 
+        prev.map(employee => 
+          employee.id === employeeId ? { ...employee, ...updatedEmployee } : employee
         )
       );
       
-      // Add to new team
-      setTeams(prev => 
-        prev.map(team => 
-          team.id === updates.teamId 
-            ? { ...team, employeeIds: [...team.employeeIds, employeeId] } 
-            : team
-        )
-      );
+      // If team changed, update team associations in local state
+      const employeeToUpdate = employees.find(e => e.id === employeeId);
+      const isTeamChanging = employeeToUpdate && 
+                            updates.teamId && 
+                            updates.teamId !== employeeToUpdate.teamId;
+      
+      if (isTeamChanging && employeeToUpdate && updates.teamId) {
+        // Refresh teams data to get updated associations
+        const teamsData = await teamsApi.getAll(token);
+        setTeams(teamsData);
+      }
+      
+      toast({
+        title: "Employee Updated",
+        description: "Employee information has been updated."
+      });
+    } catch (error) {
+      console.error("Error updating employee:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update employee. Please try again.",
+        variant: "destructive"
+      });
     }
-    
-    toast({
-      title: "Employee Updated",
-      description: "Employee information has been updated."
-    });
   };
 
-  const deleteEmployee = (employeeId: string) => {
+  const deleteEmployee = async (employeeId: string) => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
+    
     // Get the employee for reference
     const employeeToDelete = employees.find(e => e.id === employeeId);
     if (!employeeToDelete) return;
-
-    // Remove the employee
-    setEmployees(prev => prev.filter(employee => employee.id !== employeeId));
     
-    // Update the associated team
-    if (employeeToDelete.teamId) {
-      setTeams(prev => 
-        prev.map(team => 
-          team.id === employeeToDelete.teamId 
-            ? { ...team, employeeIds: team.employeeIds.filter(id => id !== employeeId) } 
-            : team
-        )
-      );
+    try {
+      // Convert string ID to number for API
+      const numericId = parseInt(employeeId);
+      if (isNaN(numericId)) throw new Error("Invalid employee ID");
+      
+      await employeesApi.delete(numericId, token);
+      
+      // Update local state
+      setEmployees(prev => prev.filter(employee => employee.id !== employeeId));
+      
+      // Refresh teams data to get updated associations
+      const teamsData = await teamsApi.getAll(token);
+      setTeams(teamsData);
+      
+      toast({
+        title: "Employee Removed",
+        description: `${employeeToDelete.name} has been removed.`
+      });
+    } catch (error) {
+      console.error("Error deleting employee:", error);
+      toast({
+        title: "Error",
+        description: "Failed to remove employee. Please try again.",
+        variant: "destructive"
+      });
     }
-    
-    toast({
-      title: "Employee Removed",
-      description: `${employeeToDelete.name} has been removed.`
-    });
   };
 
   // Getter functions
@@ -325,10 +412,5 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   );
 };
 
-export const useApp = () => {
-  const context = useContext(AppContext);
-  if (context === undefined) {
-    throw new Error("useApp must be used within an AppProvider");
-  }
-  return context;
-};
+// Export the context for testing purposes
+export { AppContext };

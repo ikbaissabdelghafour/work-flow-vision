@@ -1,18 +1,25 @@
-
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { useState, useEffect, createContext } from "react";
 import { User } from "../types";
-import { mockUsers } from "../mockData";
+import { authApi } from "../lib/api";
+import { useToast } from "@/hooks/use-toast";
+import { createContextHook } from "@/lib/contextUtils";
 
+// Define the auth context type
 interface AuthContextType {
   currentUser: User | null;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
-  isAuthenticated: boolean;
   isLoading: boolean;
+  isAuthenticated: boolean;
 }
 
+// Create the context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Create the hook
+export const useAuth = createContextHook(AuthContext, 'useAuth');
+
+// Create the provider
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -27,29 +34,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    // In a real app, this would be an API call
     setIsLoading(true);
     try {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 800));
+      const response = await authApi.login(email, password);
       
-      // Mock authentication
-      const user = mockUsers.find(u => u.email === email);
-      
-      if (user && password === "password") { // Simple mock password check
-        setCurrentUser(user);
-        localStorage.setItem("currentUser", JSON.stringify(user));
+      if (response && response.token) {
+        setCurrentUser(response.user);
+        localStorage.setItem("currentUser", JSON.stringify(response.user));
+        localStorage.setItem("auth_token", response.token);
         return true;
       }
+      return false;
+    } catch (error) {
+      console.error("Login error:", error);
       return false;
     } finally {
       setIsLoading(false);
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    const token = localStorage.getItem("auth_token");
+    if (token) {
+      try {
+        await authApi.logout(token);
+      } catch (error) {
+        console.error("Logout error:", error);
+      }
+    }
     setCurrentUser(null);
     localStorage.removeItem("currentUser");
+    localStorage.removeItem("auth_token");
   };
 
   return (
@@ -67,10 +82,5 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 };
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
-};
+// Export the context for testing purposes
+export { AuthContext };

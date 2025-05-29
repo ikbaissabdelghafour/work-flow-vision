@@ -29,19 +29,15 @@ import { Plus, Users, UserPlus } from "lucide-react";
 import { Employee, Team } from "@/types";
 
 const Teams: React.FC = () => {
-  const { teams, employees, addEmployee, addTeam } = useApp();
+  const { teams, employees, addEmployee, addTeam, isLoading } = useApp();
   const { currentUser } = useAuth();
-  
-  // Only admins can access this page
-  if (currentUser?.role !== "admin") {
-    return <Navigate to="/" />;
-  }
-  
-  const [isNewEmployeeOpen, setIsNewEmployeeOpen] = useState(false);
+  const [isAddingTeam, setIsAddingTeam] = useState(false);
+  const [isAddingEmployee, setIsAddingEmployee] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [isNewTeamOpen, setIsNewTeamOpen] = useState(false);
+  const [isNewEmployeeOpen, setIsNewEmployeeOpen] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
-  const [newEmployee, setNewEmployee] = useState<Omit<Employee, "id">>({
-    name: "",
+  const [newEmployee, setNewEmployee] = useState<Omit<Employee, "id" | "avatar"> & { teamId: string }>({
     email: "",
     role: "",
     teamId: "",
@@ -51,38 +47,64 @@ const Teams: React.FC = () => {
     employeeIds: [],
   });
   
-  const handleAddEmployee = () => {
+  const handleAddEmployee = async () => {
     if (!newEmployee.name || !newEmployee.email || !newEmployee.role || !newEmployee.teamId) {
       toast.error("Please fill in all required fields");
       return;
     }
     
-    addEmployee(newEmployee);
+    setIsAddingEmployee(true);
+    setError(null);
     
-    setNewEmployee({
-      name: "",
-      email: "",
-      role: "",
-      teamId: "",
-    });
-    
-    setIsNewEmployeeOpen(false);
+    try {
+      await addEmployee(newEmployee);
+      
+      setNewEmployee({
+        name: "",
+        email: "",
+        role: "",
+        teamId: "",
+      });
+      
+      setIsNewEmployeeOpen(false);
+      toast.success(`Employee "${newEmployee.name}" has been added successfully`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add employee');
+      toast.error("Failed to add employee", {
+        description: err instanceof Error ? err.message : 'An unexpected error occurred',
+      });
+    } finally {
+      setIsAddingEmployee(false);
+    }
   };
   
-  const handleAddTeam = () => {
+  const handleAddTeam = async () => {
     if (!newTeam.name) {
       toast.error("Please enter a team name");
       return;
     }
     
-    addTeam(newTeam);
+    setIsAddingTeam(true);
+    setError(null);
     
-    setNewTeam({
-      name: "",
-      employeeIds: [],
-    });
-    
-    setIsNewTeamOpen(false);
+    try {
+      await addTeam(newTeam);
+      
+      setNewTeam({
+        name: "",
+        employeeIds: [],
+      });
+      
+      setIsNewTeamOpen(false);
+      toast.success(`Team "${newTeam.name}" has been created successfully`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create team');
+      toast.error("Failed to create team", {
+        description: err instanceof Error ? err.message : 'An unexpected error occurred',
+      });
+    } finally {
+      setIsAddingTeam(false);
+    }
   };
   
   const openNewEmployeeDialog = (team: Team) => {
@@ -93,6 +115,13 @@ const Teams: React.FC = () => {
   
   return (
     <div className="space-y-6">
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative" role="alert">
+          <strong className="font-bold">Error: </strong>
+          <span className="block sm:inline">{error}</span>
+        </div>
+      )}
+      
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Teams</h1>
         
@@ -123,7 +152,16 @@ const Teams: React.FC = () => {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsNewTeamOpen(false)}>Cancel</Button>
-              <Button onClick={handleAddTeam}>Create Team</Button>
+              <Button onClick={handleAddTeam} disabled={isAddingTeam}>
+                {isAddingTeam ? (
+                  <>
+                    <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
+                    Creating...
+                  </>
+                ) : (
+                  'Create Team'
+                )}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -182,14 +220,34 @@ const Teams: React.FC = () => {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsNewEmployeeOpen(false)}>Cancel</Button>
-              <Button onClick={handleAddEmployee}>Add Employee</Button>
+              <Button onClick={handleAddEmployee} disabled={isAddingEmployee}>
+                {isAddingEmployee ? (
+                  <>
+                    <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
+                    Adding...
+                  </>
+                ) : (
+                  'Add Employee'
+                )}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {teams.map(team => {
+      {isLoading ? (
+        <div className="flex justify-center items-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+          <span className="ml-3">Loading teams...</span>
+        </div>
+      ) : teams.length === 0 ? (
+        <div className="text-center py-12 bg-gray-50 rounded-lg">
+          <h3 className="text-lg font-medium text-gray-500">No teams found</h3>
+          <p className="mt-2 text-sm text-gray-400">Get started by creating a new team</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {teams.map(team => {
           const teamEmployees = employees.filter(employee => employee.teamId === team.id);
           
           return (
@@ -240,7 +298,8 @@ const Teams: React.FC = () => {
             </Card>
           );
         })}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

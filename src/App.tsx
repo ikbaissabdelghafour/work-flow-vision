@@ -18,6 +18,7 @@ import Tasks from "./pages/Tasks";
 import Teams from "./pages/Teams";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
+import ApiTest from "./pages/ApiTest";
 
 const queryClient = new QueryClient();
 
@@ -46,6 +47,7 @@ const App = () => (
                 <Route element={<RouteGuard requireAdmin={true} />}>
                   <Route path="/teams" element={<Teams />} />
                   <Route path="/settings" element={<Settings />} />
+                  <Route path="/api-test" element={<ApiTest />} />
                 </Route>
 
                 {/* 404 route */}
