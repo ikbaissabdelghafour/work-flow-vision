@@ -33,11 +33,13 @@ export interface ApiTask {
   description: string;
   status: TaskStatus;
   project_id: number;
+  team_id?: number;
   tjm?: number;
   days_spent?: number;
   created_at?: string;
   updated_at?: string;
   employees?: ApiEmployee[];
+  team?: ApiTeam;
 }
 
 // Frontend types (camelCase)
@@ -47,6 +49,7 @@ export interface Task {
   description: string;
   status: TaskStatus;
   projectId: string;
+  teamId?: string;
   assignedEmployees: string[];
   createdAt: string;
   tjm?: number; // Taux Journalier Moyen (Daily Rate)

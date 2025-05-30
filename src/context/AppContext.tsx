@@ -1,4 +1,4 @@
-import React, { useState, useEffect, createContext } from "react";
+import React, { useState, useEffect, createContext, useCallback } from "react";
 import { AppState, Project, Task, Employee, Team, TaskStatus } from "../types";
 import { teamsApi, employeesApi, projectsApi, tasksApi } from "../lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -33,6 +33,7 @@ interface AppContextType extends AppState {
   
   calculateProjectCost: (projectId: string) => number;
   isLoading: boolean;
+  fetchData: () => Promise<void>;
 }
 
 // Create the context
@@ -52,69 +53,121 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const { toast } = useToast();
   const { currentUser } = useAuth();
 
+  // Fetch data function to load all data from API
+  const fetchData = useCallback(async () => {
+    if (!currentUser) return;
+    
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
+    
+    setIsLoading(true);
+    try {
+      // Fetch teams and employees first
+      const [teamsData, employeesData] = await Promise.all([
+        teamsApi.getAll(token),
+        employeesApi.getAll(token),
+      ]);
+      
+      // Fetch projects with pagination handling
+      const projectsResponse = await projectsApi.getAll(token);
+      // Extract projects from the paginated response
+      const projectsData = Array.isArray(projectsResponse) 
+        ? projectsResponse 
+        : projectsResponse.projects || [];
+      
+      // Fetch tasks
+      const tasksData = await tasksApi.getAll(token);
+      
+      console.log('Fetched data:', {
+        teams: teamsData,
+        employees: employeesData,
+        projects: projectsData,
+        tasks: tasksData
+      });
+      
+      setTeams(teamsData);
+      setEmployees(employeesData);
+      setProjects(projectsData);
+      setTasks(tasksData);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load data. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentUser, toast]);
+  
   // Fetch data when user is authenticated
   useEffect(() => {
-    const fetchData = async () => {
-      if (!currentUser) return;
-      
-      const token = localStorage.getItem("auth_token");
-      if (!token) return;
-      
-      setIsLoading(true);
-      try {
-        // Fetch all data in parallel
-        const [teamsData, employeesData, projectsData, tasksData] = await Promise.all([
-          teamsApi.getAll(token),
-          employeesApi.getAll(token),
-          projectsApi.getAll(token),
-          tasksApi.getAll(token)
-        ]);
-        
-        setTeams(teamsData);
-        setEmployees(employeesData);
-        setProjects(projectsData);
-        setTasks(tasksData);
-      } catch (error) {
-        console.error("Error fetching data:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load data. Please try again.",
-          variant: "destructive"
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
     fetchData();
-  }, [currentUser, toast]);
+  }, [currentUser, fetchData]);
 
   // Generate a new ID (in a real app would be handled by the backend)
   const generateId = () => Math.random().toString(36).substr(2, 9);
 
   // Task operations
-  const addTask = (task: Omit<Task, "id" | "createdAt">) => {
-    const newTask: Task = {
-      ...task,
-      id: generateId(),
-      createdAt: new Date().toISOString(),
-    };
+  const addTask = async (task: Omit<Task, "id" | "createdAt">) => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
     
-    setTasks(prev => [...prev, newTask]);
+    setIsLoading(true);
     
-    // Update the associated project
-    setProjects(prev => 
-      prev.map(project => 
-        project.id === task.projectId 
-          ? { ...project, tasks: [...project.tasks, newTask.id] } 
-          : project
-      )
-    );
-
-    toast({
-      title: "Task Created",
-      description: `Task "${newTask.title}" has been created.`
-    });
+    try {
+      // Prepare task data for API
+      const taskData = {
+        title: task.title,
+        description: task.description,
+        status: task.status,
+        project_id: parseInt(task.projectId),
+        tjm: task.tjm,
+        days_spent: task.daysSpent || 0,
+        // Include assigned employees if available
+        employee_ids: task.assignedEmployees || []
+      };
+      
+      // Call the API to create the task
+      const createdTask = await tasksApi.create(taskData, token);
+      
+      // Update local state with the new task
+      const newTask: Task = {
+        id: createdTask.id.toString(),
+        title: createdTask.title,
+        description: createdTask.description,
+        status: createdTask.status as TaskStatus,
+        projectId: createdTask.project_id ? createdTask.project_id.toString() : task.projectId,
+        tjm: createdTask.tjm,
+        daysSpent: createdTask.days_spent || task.daysSpent || 0,
+        createdAt: createdTask.created_at || new Date().toISOString(),
+        assignedEmployees: task.assignedEmployees || [],
+        teamId: task.teamId
+      };
+      
+      setTasks(prev => [...prev, newTask]);
+      
+      // Refresh projects data to get updated associations
+      const projectsData = await projectsApi.getAll(token);
+      setProjects(projectsData);
+      
+      toast({
+        title: "Task Created",
+        description: `Task "${newTask.title}" has been created.`
+      });
+      
+      return newTask;
+    } catch (error) {
+      console.error("Error creating task:", error);
+      toast({
+        title: "Error",
+        description: "Failed to create task. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const updateTask = (taskId: string, updates: Partial<Task>) => {
@@ -167,49 +220,118 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Project operations
-  const addProject = (project: Omit<Project, "id" | "createdAt">) => {
-    const newProject: Project = {
-      ...project,
-      id: generateId(),
-      createdAt: new Date().toISOString(),
-    };
+  const addProject = async (project: Omit<Project, "id" | "createdAt">) => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
     
-    setProjects(prev => [...prev, newProject]);
+    setIsLoading(true);
     
-    toast({
-      title: "Project Created",
-      description: `Project "${newProject.name}" has been created.`
-    });
+    try {
+      // Call the API to create the project
+      const createdProject = await projectsApi.create(project, token);
+      
+      // Update local state with the new project
+      setProjects(prev => [...prev, createdProject]);
+      
+      toast({
+        title: "Project Created",
+        description: `Project "${createdProject.name}" has been created.`
+      });
+      
+      return createdProject;
+    } catch (error) {
+      console.error("Error creating project:", error);
+      toast({
+        title: "Error",
+        description: "Failed to create project. Please try again.",
+        variant: "destructive"
+      });
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const updateProject = (projectId: string, updates: Partial<Project>) => {
-    setProjects(prev => 
-      prev.map(project => 
-        project.id === projectId ? { ...project, ...updates } : project
-      )
-    );
+  const updateProject = async (projectId: string, updates: Partial<Project>) => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
     
-    toast({
-      title: "Project Updated",
-      description: "The project has been updated successfully."
-    });
+    setIsLoading(true);
+    
+    try {
+      // Convert string ID to number for API
+      const numericId = parseInt(projectId);
+      if (isNaN(numericId)) throw new Error("Invalid project ID");
+      
+      // Call the API to update the project
+      const updatedProject = await projectsApi.update(numericId, updates, token);
+      
+      // Update local state
+      setProjects(prev => 
+        prev.map(project => 
+          project.id === projectId ? { ...project, ...updatedProject } : project
+        )
+      );
+      
+      toast({
+        title: "Project Updated",
+        description: "The project has been updated successfully."
+      });
+      
+      return updatedProject;
+    } catch (error) {
+      console.error("Error updating project:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update project. Please try again.",
+        variant: "destructive"
+      });
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const deleteProject = (projectId: string) => {
+  const deleteProject = async (projectId: string) => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
+    
     // Get the project for reference
     const projectToDelete = projects.find(p => p.id === projectId);
     if (!projectToDelete) return;
-
-    // Remove the project
-    setProjects(prev => prev.filter(project => project.id !== projectId));
     
-    // Remove all tasks associated with the project
-    setTasks(prev => prev.filter(task => task.projectId !== projectId));
+    setIsLoading(true);
     
-    toast({
-      title: "Project Deleted",
-      description: `Project "${projectToDelete.name}" has been deleted.`
-    });
+    try {
+      // Convert string ID to number for API
+      const numericId = parseInt(projectId);
+      if (isNaN(numericId)) throw new Error("Invalid project ID");
+      
+      // Call the API to delete the project
+      await projectsApi.delete(numericId, token);
+      
+      // Update local state
+      setProjects(prev => prev.filter(project => project.id !== projectId));
+      
+      // Refresh tasks to remove any associated with the deleted project
+      const tasksData = await tasksApi.getAll(token);
+      setTasks(tasksData);
+      
+      toast({
+        title: "Project Deleted",
+        description: `Project "${projectToDelete.name}" has been deleted.`
+      });
+    } catch (error) {
+      console.error("Error deleting project:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete project. Please try again.",
+        variant: "destructive"
+      });
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Team operations
@@ -236,44 +358,58 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Employee operations
-  const addEmployee = async (employee: Omit<Employee, "id">) => {
+  const addEmployee = async (employee: Omit<Employee, "id"> & { createUser?: boolean }) => {
     const token = localStorage.getItem("auth_token");
     if (!token) return;
-
-    // Generate avatar if not provided
-    const employeeWithAvatar = {
-      ...employee,
-      avatar: employee.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${employee.name.toLowerCase().replace(/\s/g, '')}`
-    };
-
+    
+    setIsLoading(true);
+    
     try {
-      const newEmployee = await employeesApi.create(employeeWithAvatar, token);
+      // Prepare employee data for API
+      const employeeData = {
+        name: employee.name,
+        email: employee.email,
+        role: employee.role,
+        team_id: parseInt(employee.teamId),
+        create_user: employee.createUser || false, // Flag to create a user account for this employee
+        avatar: employee.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${employee.name.toLowerCase().replace(/\s/g, '')}`
+      };
+      
+      // Call the API to create the employee
+      const createdEmployee = await employeesApi.create(employeeData, token);
+      
+      // Update local state with the new employee
+      const newEmployee: Employee = {
+        id: createdEmployee.id.toString(),
+        name: createdEmployee.name,
+        email: createdEmployee.email,
+        role: createdEmployee.role,
+        teamId: createdEmployee.team_id.toString(),
+        avatar: createdEmployee.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${employee.name}`,
+      };
+      
       setEmployees(prev => [...prev, newEmployee]);
-
-      // Update teams in local state to reflect the new employee
-      // This is needed because our API might not return the updated team immediately
-      if (newEmployee.team_id) {
-        const teamId = newEmployee.team_id.toString();
-        setTeams(prev =>
-          prev.map(team =>
-            team.id === teamId
-              ? { ...team, employeeIds: [...(team.employeeIds || []), newEmployee.id] }
-              : team
-          )
-        );
-      }
-
+      
+      // Refresh teams data to get updated associations
+      const teamsData = await teamsApi.getAll(token);
+      setTeams(teamsData);
+      
       toast({
-        title: "Employee Added",
-        description: `${newEmployee.name} has been added to the team.`
+        title: employee.createUser ? "Client Added" : "Employee Added",
+        description: `${newEmployee.name} has been ${employee.createUser ? 'added as a client' : 'added to the team'}.`
       });
+      
+      return newEmployee;
     } catch (error) {
-      console.error("Error creating employee:", error);
+      console.error("Error adding employee:", error);
       toast({
         title: "Error",
-        description: "Failed to add employee. Please try again.",
+        description: `Failed to add ${employee.createUser ? 'client' : 'employee'}. Please try again.`,
         variant: "destructive"
       });
+      throw error;
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -404,7 +540,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         getTasksByProject,
         getEmployeesByTeam,
         getProjectsByTeam,
-        calculateProjectCost
+        calculateProjectCost,
+        isLoading,
+        fetchData
       }}
     >
       {children}

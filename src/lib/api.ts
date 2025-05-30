@@ -1,5 +1,5 @@
 import { 
-  User, Team, Employee, Project, Task,
+  User, Team, Employee, Project, Task, EmployerRegistration,
   ApiUser, ApiTeam, ApiEmployee, ApiProject, ApiTask,
   mapApiUserToUser, mapApiTeamToTeam, mapApiEmployeeToEmployee, 
   mapApiProjectToProject, mapApiTaskToTask 
@@ -52,9 +52,24 @@ async function apiRequest<T>(
       }
     }
     
-    const responseData = await response.json();
-    console.log(`✅ API Response: ${method} ${url}`, responseData);
-    return responseData;
+    // For 204 No Content responses, return null without trying to parse JSON
+    if (response.status === 204) {
+      console.log(`✅ API Response: ${method} ${url} (No Content)`);
+      return null as T;
+    }
+    
+    // Check if there's content to parse
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      const text = await response.text();
+      // Only try to parse as JSON if there's actual content
+      const responseData = text.trim() ? JSON.parse(text) : null;
+      console.log(`✅ API Response: ${method} ${url}`, responseData);
+      return responseData;
+    }
+    
+    console.log(`✅ API Response: ${method} ${url} (No JSON content)`);
+    return null as T;
   } catch (error) {
     console.error(`❌ API Request Failed: ${method} ${url}`, error);
     throw error;
@@ -78,6 +93,22 @@ export const authApi = {
   getCurrentUser: async (token: string): Promise<User> => {
     const apiUser = await apiRequest<ApiUser>('/user', 'GET', undefined, token);
     return mapApiUserToUser(apiUser);
+  },
+  
+  registerEmployer: async (employerData: EmployerRegistration): Promise<{user: User, token: string}> => {
+    const data = {
+      name: employerData.name,
+      email: employerData.email,
+      password: employerData.password,
+      role: 'employer',
+      team_id: parseInt(employerData.teamId)
+    };
+    
+    const response = await apiRequest<{user: ApiUser, token: string}>('/register', 'POST', data);
+    return {
+      user: mapApiUserToUser(response.user),
+      token: response.token
+    };
   }
 };
 
@@ -164,10 +195,86 @@ export const employeesApi = {
 };
 
 // Projects API
+// Define pagination response type
+interface PaginatedResponse<T> {
+  current_page: number;
+  data: T[];
+  from: number;
+  last_page: number;
+  per_page: number;
+  to: number;
+  total: number;
+  links: {
+    url: string | null;
+    label: string;
+    active: boolean;
+  }[];
+}
+
+// Define project pagination response type
+interface ProjectPaginationResponse {
+  projects: Project[];
+  pagination: {
+    currentPage: number;
+    lastPage: number;
+    perPage: number;
+    total: number;
+  };
+}
+
 export const projectsApi = {
-  getAll: async (token: string): Promise<Project[]> => {
-    const apiProjects = await apiRequest<ApiProject[]>('/projects', 'GET', undefined, token);
-    return apiProjects.map(mapApiProjectToProject);
+  getAll: async (
+    token: string, 
+    page: number = 1, 
+    perPage: number = 10, 
+    search: string = '',
+    sortField: string = 'created_at',
+    sortDirection: 'asc' | 'desc' = 'desc'
+  ): Promise<Project[] | ProjectPaginationResponse> => {
+    // Build query parameters
+    const queryParams = new URLSearchParams({
+      page: page.toString(),
+      per_page: perPage.toString(),
+      sort_field: sortField,
+      sort_direction: sortDirection
+    });
+    
+    if (search) {
+      queryParams.append('search', search);
+    }
+    
+    const url = `/projects?${queryParams.toString()}`;
+    
+    try {
+      // Get response from API
+      const response = await apiRequest<PaginatedResponse<ApiProject> | ApiProject[]>(url, 'GET', undefined, token);
+      
+      // Handle both array and paginated response formats
+      if (Array.isArray(response)) {
+        // If response is an array, map directly
+        return response.map(mapApiProjectToProject);
+      } else if (response && 'data' in response) {
+        // If response is paginated, extract data and pagination info
+        const projects = response.data.map(mapApiProjectToProject);
+        
+        return {
+          projects,
+          pagination: {
+            currentPage: response.current_page,
+            lastPage: response.last_page,
+            perPage: response.per_page,
+            total: response.total
+          }
+        };
+      } else {
+        // Fallback for unexpected response format
+        console.error('Unexpected response format:', response);
+        return [];
+      }
+    } catch (error) {
+      console.error('Error fetching projects:', error);
+      throw error;
+    }
   },
   
   getById: async (id: number, token: string): Promise<Project> => {
@@ -228,18 +335,69 @@ export const tasksApi = {
   },
   
   create: async (task: Partial<Task>, token: string): Promise<Task> => {
-    // Convert camelCase to snake_case for API
-    const apiData = {
-      title: task.title,
-      description: task.description,
-      status: task.status,
-      project_id: task.projectId ? parseInt(task.projectId) : undefined,
-      tjm: task.tjm,
-      days_spent: task.daysSpent
-    };
-    
-    const apiTask = await apiRequest<ApiTask>('/tasks', 'POST', apiData, token);
-    return mapApiTaskToTask(apiTask);
+    try {
+      // Convert camelCase to snake_case for API
+      const apiData: Record<string, unknown> = {
+        title: task.title,
+        description: task.description,
+        status: task.status,
+        project_id: task.projectId ? parseInt(task.projectId.toString()) : undefined,
+        team_id: task.teamId ? parseInt(task.teamId.toString()) : undefined,
+        tjm: task.tjm,
+        days_spent: task.daysSpent
+      };
+      
+      // Handle employee assignments properly
+      if (task.assignedEmployees && task.assignedEmployees.length > 0) {
+        // First, ensure we have a clean array of non-null values
+        const validEmployees = task.assignedEmployees.filter(
+          (emp): emp is NonNullable<typeof emp> => emp !== null && emp !== undefined
+        );
+        
+        // Then process each employee to extract IDs safely
+        const employeeIds: number[] = [];
+        
+        validEmployees.forEach(emp => {
+          // Handle object with id property
+          if (typeof emp === 'object' && emp !== null && 'id' in emp && emp.id !== null) {
+            const id = typeof emp.id === 'number' ? emp.id : parseInt(String(emp.id));
+            if (!isNaN(id)) employeeIds.push(id);
+          } 
+          // Handle string or number directly
+          else if (typeof emp === 'string' || typeof emp === 'number') {
+            const id = parseInt(String(emp));
+            if (!isNaN(id)) employeeIds.push(id);
+          }
+        });
+        
+        // Only set the employee_ids if we have valid IDs
+        if (employeeIds.length > 0) {
+          apiData.employee_ids = employeeIds;
+        }
+      }
+      
+      // Clean up undefined values
+      Object.keys(apiData).forEach(key => {
+        if (apiData[key] === undefined) {
+          delete apiData[key];
+        }
+      });
+      
+      console.log('Creating task with data:', JSON.stringify(apiData, null, 2));
+      
+      // Make the API request
+      const apiTask = await apiRequest<ApiTask>('/tasks', 'POST', apiData, token);
+      console.log('API response for task creation:', apiTask);
+      
+      if (!apiTask) {
+        throw new Error('No response received from the server');
+      }
+      
+      return mapApiTaskToTask(apiTask);
+    } catch (error) {
+      console.error('Error in tasksApi.create:', error);
+      throw error; // Re-throw to allow handling in the component
+    }
   },
   
   update: async (id: number, task: Partial<Task>, token: string): Promise<Task> => {

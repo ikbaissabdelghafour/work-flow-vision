@@ -12,10 +12,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Bell, Search, Settings } from "lucide-react";
+import { Bell, Search, Settings, User } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const AppHeader: React.FC = () => {
   const { currentUser, logout } = useAuth();
+  const navigate = useNavigate();
   
   // Get user initials for the avatar fallback
   const getInitials = () => {
@@ -43,12 +46,34 @@ const AppHeader: React.FC = () => {
         </div>
         
         <div className="flex items-center gap-4">
-          <button className="p-2 rounded-full hover:bg-gray-100 transition-colors">
-            <Bell className="h-5 w-5 text-gray-600" />
-          </button>
-          <button className="p-2 rounded-full hover:bg-gray-100 transition-colors">
-            <Settings className="h-5 w-5 text-gray-600" />
-          </button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button className="p-2 rounded-full hover:bg-gray-100 transition-colors">
+                  <Bell className="h-5 w-5 text-gray-600" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Notifications</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button 
+                  className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+                  onClick={() => navigate('/settings')}
+                >
+                  <Settings className="h-5 w-5 text-gray-600" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Settings</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

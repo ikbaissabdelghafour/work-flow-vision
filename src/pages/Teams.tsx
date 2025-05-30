@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import { Navigate } from "react-router-dom";
@@ -24,29 +24,70 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Plus, Users, UserPlus } from "lucide-react";
-import { Employee, Team } from "@/types";
+import { Plus, Users, UserPlus, Search, Loader2, RefreshCw, UserCircle2 } from "lucide-react";
+import { Employee, Team, User } from "@/types";
 
 const Teams: React.FC = () => {
-  const { teams, employees, addEmployee, addTeam, isLoading } = useApp();
+  const { teams, employees, addEmployee, addTeam, isLoading, getEmployeesByTeam } = useApp();
   const { currentUser } = useAuth();
   const [isAddingTeam, setIsAddingTeam] = useState(false);
   const [isAddingEmployee, setIsAddingEmployee] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isNewTeamOpen, setIsNewTeamOpen] = useState(false);
   const [isNewEmployeeOpen, setIsNewEmployeeOpen] = useState(false);
+  const [isAddExistingEmployeeOpen, setIsAddExistingEmployeeOpen] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
-  const [newEmployee, setNewEmployee] = useState<Omit<Employee, "id" | "avatar"> & { teamId: string }>({
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([]);
+  const [selectedExistingEmployees, setSelectedExistingEmployees] = useState<string[]>([]);
+  const [isAddingExistingEmployees, setIsAddingExistingEmployees] = useState(false);
+  
+  const [newEmployee, setNewEmployee] = useState<Omit<Employee, "id" | "avatar"> & { teamId: string; isClient: boolean }>({
+    name: "",
     email: "",
     role: "",
     teamId: "",
+    isClient: false,
   });
   const [newTeam, setNewTeam] = useState<Omit<Team, "id">>({
     name: "",
     employeeIds: [],
   });
   
+  // Filter employees that are not already in the selected team
+  useEffect(() => {
+    if (selectedTeam && searchTerm) {
+      const teamEmployeeIds = employees
+        .filter(emp => emp.teamId === selectedTeam.id)
+        .map(emp => emp.id);
+      
+      const filtered = employees.filter(emp => 
+        !teamEmployeeIds.includes(emp.id) && 
+        (emp.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+         emp.email.toLowerCase().includes(searchTerm.toLowerCase()))
+      );
+      
+      setFilteredEmployees(filtered);
+    } else {
+      setFilteredEmployees([]);
+    }
+  }, [searchTerm, selectedTeam, employees]);
+
   const handleAddEmployee = async () => {
     if (!newEmployee.name || !newEmployee.email || !newEmployee.role || !newEmployee.teamId) {
       toast.error("Please fill in all required fields");
@@ -57,24 +98,64 @@ const Teams: React.FC = () => {
     setError(null);
     
     try {
-      await addEmployee(newEmployee);
+      await addEmployee({
+        ...newEmployee,
+        // Create a user account if this is a client
+        createUser: newEmployee.isClient
+      });
       
       setNewEmployee({
         name: "",
         email: "",
         role: "",
         teamId: "",
+        isClient: false
       });
       
       setIsNewEmployeeOpen(false);
-      toast.success(`Employee "${newEmployee.name}" has been added successfully`);
+      toast.success(`${newEmployee.isClient ? 'Client' : 'Employee'} "${newEmployee.name}" has been added successfully`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add employee');
-      toast.error("Failed to add employee", {
+      toast.error(`Failed to add ${newEmployee.isClient ? 'client' : 'employee'}`, {
         description: err instanceof Error ? err.message : 'An unexpected error occurred',
       });
     } finally {
       setIsAddingEmployee(false);
+    }
+  };
+  
+  const handleAddExistingEmployees = async () => {
+    if (!selectedTeam || selectedExistingEmployees.length === 0) {
+      toast.error("Please select at least one employee");
+      return;
+    }
+    
+    setIsAddingExistingEmployees(true);
+    setError(null);
+    
+    try {
+      // In a real implementation, we would call an API to add these employees to the team
+      // For now, we'll simulate this by updating each employee's teamId
+      for (const employeeId of selectedExistingEmployees) {
+        const employee = employees.find(e => e.id === employeeId);
+        if (employee) {
+          await addEmployee({
+            ...employee,
+            teamId: selectedTeam.id
+          });
+        }
+      }
+      
+      setSelectedExistingEmployees([]);
+      setIsAddExistingEmployeeOpen(false);
+      toast.success(`${selectedExistingEmployees.length} employees added to ${selectedTeam.name}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add employees to team');
+      toast.error("Failed to add employees to team", {
+        description: err instanceof Error ? err.message : 'An unexpected error occurred',
+      });
+    } finally {
+      setIsAddingExistingEmployees(false);
     }
   };
   
@@ -111,6 +192,22 @@ const Teams: React.FC = () => {
     setSelectedTeam(team);
     setNewEmployee(prev => ({ ...prev, teamId: team.id }));
     setIsNewEmployeeOpen(true);
+  };
+  
+  const openAddExistingEmployeeDialog = (team: Team) => {
+    setSelectedTeam(team);
+    setSearchTerm("");
+    setFilteredEmployees([]);
+    setSelectedExistingEmployees([]);
+    setIsAddExistingEmployeeOpen(true);
+  };
+  
+  const toggleEmployeeSelection = (employeeId: string) => {
+    setSelectedExistingEmployees(prev => 
+      prev.includes(employeeId) 
+        ? prev.filter(id => id !== employeeId)
+        : [...prev, employeeId]
+    );
   };
   
   return (
@@ -166,43 +263,89 @@ const Teams: React.FC = () => {
           </DialogContent>
         </Dialog>
         
+        {/* Add New Employee/Client Dialog */}
         <Dialog open={isNewEmployeeOpen} onOpenChange={setIsNewEmployeeOpen}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Add New Team Member</DialogTitle>
               <DialogDescription>
-                Add a new employee to {selectedTeam?.name}
+                Add a new employee or client to {selectedTeam?.name}
               </DialogDescription>
             </DialogHeader>
+            <Tabs defaultValue="employee" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="employee">Employee</TabsTrigger>
+                <TabsTrigger value="client">Client</TabsTrigger>
+              </TabsList>
+              <TabsContent value="employee" className="mt-4">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Employee Name</Label>
+                    <Input 
+                      id="name" 
+                      placeholder="Full name"
+                      value={newEmployee.name}
+                      onChange={(e) => setNewEmployee(prev => ({ ...prev, name: e.target.value, isClient: false }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email Address</Label>
+                    <Input 
+                      id="email" 
+                      type="email"
+                      placeholder="Email address"
+                      value={newEmployee.email}
+                      onChange={(e) => setNewEmployee(prev => ({ ...prev, email: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="role">Role</Label>
+                    <Input 
+                      id="role" 
+                      placeholder="Job title or role"
+                      value={newEmployee.role}
+                      onChange={(e) => setNewEmployee(prev => ({ ...prev, role: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              </TabsContent>
+              <TabsContent value="client" className="mt-4">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="client-name">Client Name</Label>
+                    <Input 
+                      id="client-name" 
+                      placeholder="Full name"
+                      value={newEmployee.name}
+                      onChange={(e) => setNewEmployee(prev => ({ ...prev, name: e.target.value, isClient: true }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="client-email">Email Address</Label>
+                    <Input 
+                      id="client-email" 
+                      type="email"
+                      placeholder="Email address"
+                      value={newEmployee.email}
+                      onChange={(e) => setNewEmployee(prev => ({ ...prev, email: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="client-role">Company/Position</Label>
+                    <Input 
+                      id="client-role" 
+                      placeholder="Company name or position"
+                      value={newEmployee.role}
+                      onChange={(e) => setNewEmployee(prev => ({ ...prev, role: e.target.value }))}
+                    />
+                  </div>
+                  <div className="p-3 bg-blue-50 rounded-md text-sm text-blue-700">
+                    <p>A user account will be created for this client, allowing them to view their projects and track progress.</p>
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
             <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Employee Name</Label>
-                <Input 
-                  id="name" 
-                  placeholder="Full name"
-                  value={newEmployee.name}
-                  onChange={(e) => setNewEmployee(prev => ({ ...prev, name: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
-                <Input 
-                  id="email" 
-                  type="email"
-                  placeholder="Email address"
-                  value={newEmployee.email}
-                  onChange={(e) => setNewEmployee(prev => ({ ...prev, email: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="role">Role</Label>
-                <Input 
-                  id="role" 
-                  placeholder="Job title or role"
-                  value={newEmployee.role}
-                  onChange={(e) => setNewEmployee(prev => ({ ...prev, role: e.target.value }))}
-                />
-              </div>
               <div className="space-y-2">
                 <Label htmlFor="teamId">Team</Label>
                 <select
@@ -227,7 +370,99 @@ const Teams: React.FC = () => {
                     Adding...
                   </>
                 ) : (
-                  'Add Employee'
+                  `Add ${newEmployee.isClient ? 'Client' : 'Employee'}`
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        
+        {/* Add Existing Employees Dialog */}
+        <Dialog open={isAddExistingEmployeeOpen} onOpenChange={setIsAddExistingEmployeeOpen}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Add Existing Employees</DialogTitle>
+              <DialogDescription>
+                Add existing employees to {selectedTeam?.name}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="relative">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search employees by name or email"
+                  className="pl-8"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              
+              <div className="border rounded-md">
+                {filteredEmployees.length > 0 ? (
+                  <div className="divide-y">
+                    {filteredEmployees.map(employee => (
+                      <div 
+                        key={employee.id} 
+                        className="flex items-center space-x-3 p-3 hover:bg-gray-50"
+                      >
+                        <Checkbox 
+                          id={`employee-${employee.id}`} 
+                          checked={selectedExistingEmployees.includes(employee.id)}
+                          onCheckedChange={() => toggleEmployeeSelection(employee.id)}
+                        />
+                        <div className="flex items-center space-x-3 flex-1">
+                          <Avatar>
+                            <AvatarImage src={employee.avatar} />
+                            <AvatarFallback>{employee.name.charAt(0)}</AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <Label 
+                              htmlFor={`employee-${employee.id}`}
+                              className="font-medium cursor-pointer"
+                            >
+                              {employee.name}
+                            </Label>
+                            <p className="text-xs text-gray-500">{employee.email}</p>
+                            <p className="text-xs text-gray-500">{employee.role}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : searchTerm ? (
+                  <div className="p-4 text-center text-gray-500">
+                    <UserCircle2 className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                    <p>No employees found matching "{searchTerm}"</p>
+                  </div>
+                ) : (
+                  <div className="p-4 text-center text-gray-500">
+                    <Search className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                    <p>Search for employees to add to this team</p>
+                  </div>
+                )}
+              </div>
+              
+              {selectedExistingEmployees.length > 0 && (
+                <div className="bg-blue-50 p-3 rounded-md">
+                  <p className="text-sm text-blue-700">
+                    {selectedExistingEmployees.length} employee{selectedExistingEmployees.length !== 1 ? 's' : ''} selected
+                  </p>
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsAddExistingEmployeeOpen(false)}>Cancel</Button>
+              <Button 
+                onClick={handleAddExistingEmployees} 
+                disabled={isAddingExistingEmployees || selectedExistingEmployees.length === 0}
+              >
+                {isAddingExistingEmployees ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Adding...
+                  </>
+                ) : (
+                  'Add to Team'
                 )}
               </Button>
             </DialogFooter>
@@ -285,15 +520,26 @@ const Teams: React.FC = () => {
                   )}
                 </div>
               </CardContent>
-              <CardFooter>
-                <Button 
-                  variant="outline" 
-                  className="w-full flex items-center gap-1"
-                  onClick={() => openNewEmployeeDialog(team)}
-                >
-                  <UserPlus className="h-4 w-4" />
-                  <span>Add Member</span>
-                </Button>
+              <CardFooter className="flex flex-col space-y-2">
+                <div className="flex w-full gap-2">
+                  <Button 
+                    variant="outline" 
+                    className="flex-1 flex items-center gap-1"
+                    onClick={() => openNewEmployeeDialog(team)}
+                  >
+                    <UserPlus className="h-4 w-4" />
+                    <span>Add New</span>
+                  </Button>
+                  
+                  <Button 
+                    variant="outline" 
+                    className="flex-1 flex items-center gap-1"
+                    onClick={() => openAddExistingEmployeeDialog(team)}
+                  >
+                    <Users className="h-4 w-4" />
+                    <span>Add Existing</span>
+                  </Button>
+                </div>
               </CardFooter>
             </Card>
           );

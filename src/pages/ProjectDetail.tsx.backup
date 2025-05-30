@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import { useParams, Navigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
@@ -43,22 +44,7 @@ import {
 } from "@/components/ui/collapsible";
 import { format } from "date-fns";
 import { Task, TaskStatus } from "@/types";
-import { 
-  Plus, 
-  ArrowRight, 
-  ChevronDown, 
-  ChevronUp, 
-  Edit, 
-  Trash, 
-  Loader2, 
-  Calendar, 
-  User, 
-  Clock, 
-  DollarSign, 
-  CheckCircle, 
-  AlertCircle, 
-  MoreHorizontal 
-} from "lucide-react";
+import { Plus, ArrowRight, ChevronDown, ChevronUp, Edit, Trash, Loader2, Calendar, User, Clock, DollarSign, CheckCircle, AlertCircle, MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 
@@ -134,7 +120,6 @@ const ProjectDetail: React.FC = () => {
     setIsDeleteTaskOpen(true);
   };
   
-  // Handle task creation
   const handleCreateTask = async () => {
     if (!newTask.title) {
       toast.error("Task title is required");
@@ -205,12 +190,10 @@ const ProjectDetail: React.FC = () => {
     }
   };
   
-  // Handle task status change
   const handleChangeStatus = (taskId: string, newStatus: TaskStatus) => {
     updateTaskStatus(taskId, newStatus);
   };
   
-  // Render task card with collapsible content
   const renderTaskCard = (task: Task) => {
     const assignedEmployeeNames = task.assignedEmployees
       .map(employeeId => getEmployeeById(employeeId)?.name || "Unknown")
@@ -261,7 +244,20 @@ const ProjectDetail: React.FC = () => {
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                       <span className="sr-only">Open menu</span>
-                      <MoreHorizontal className="h-4 w-4" />
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="h-4 w-4"
+                      >
+                        <circle cx="12" cy="12" r="1" />
+                        <circle cx="12" cy="5" r="1" />
+                        <circle cx="12" cy="19" r="1" />
+                      </svg>
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
@@ -392,6 +388,7 @@ const ProjectDetail: React.FC = () => {
       </div>
     );
   };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -623,123 +620,130 @@ const ProjectDetail: React.FC = () => {
         </Dialog>
       </div>
       
-      <Tabs defaultValue="kanban" className="mt-6">
-        <TabsList>
-          <TabsTrigger value="kanban">Kanban</TabsTrigger>
-          <TabsTrigger value="list">List</TabsTrigger>
-        </TabsList>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Team</CardTitle>
+            <CardDescription>{team?.name || "No Team Assigned"}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {teamEmployees.length > 0 ? (
+                teamEmployees.map(employee => (
+                  <div key={employee.id} className="flex items-center gap-2 p-2 rounded-md border">
+                    <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600">
+                      {employee.name.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="font-medium">{employee.name}</p>
+                      <p className="text-xs text-gray-500">{employee.role}</p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-gray-500">No team members assigned</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
         
-        <TabsContent value="kanban" className="mt-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="border-t-4 border-t-gray-400">
-              <CardHeader className="bg-gray-50">
-                <CardTitle className="text-gray-700 flex items-center">
-                  <AlertCircle className="h-4 w-4 mr-2 text-gray-500" />
-                  To Do
-                </CardTitle>
-                <CardDescription>{todoTasks.length} task{todoTasks.length !== 1 ? 's' : ''}</CardDescription>
-              </CardHeader>
-              <CardContent className="pt-4 max-h-[calc(100vh-300px)] overflow-y-auto">
-                {todoTasks.length > 0 ? (
-                  todoTasks.map(task => renderTaskCard(task))
-                ) : (
-                  <div className="text-center py-8 text-gray-400 italic">
-                    No tasks to do
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-            
-            <Card className="border-t-4 border-t-blue-400">
-              <CardHeader className="bg-blue-50">
-                <CardTitle className="text-blue-700 flex items-center">
-                  <ArrowRight className="h-4 w-4 mr-2 text-blue-500" />
-                  In Progress
-                </CardTitle>
-                <CardDescription>{inProgressTasks.length} task{inProgressTasks.length !== 1 ? 's' : ''}</CardDescription>
-              </CardHeader>
-              <CardContent className="pt-4 max-h-[calc(100vh-300px)] overflow-y-auto">
-                {inProgressTasks.length > 0 ? (
-                  inProgressTasks.map(task => renderTaskCard(task))
-                ) : (
-                  <div className="text-center py-8 text-gray-400 italic">
-                    No tasks in progress
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-            
-            <Card className="border-t-4 border-t-green-400">
-              <CardHeader className="bg-green-50">
-                <CardTitle className="text-green-700 flex items-center">
-                  <CheckCircle className="h-4 w-4 mr-2 text-green-500" />
-                  Done
-                </CardTitle>
-                <CardDescription>{doneTasks.length} task{doneTasks.length !== 1 ? 's' : ''}</CardDescription>
-              </CardHeader>
-              <CardContent className="pt-4 max-h-[calc(100vh-300px)] overflow-y-auto">
-                {doneTasks.length > 0 ? (
-                  doneTasks.map(task => renderTaskCard(task))
-                ) : (
-                  <div className="text-center py-8 text-gray-400 italic">
-                    No completed tasks
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
+        <Card>
+          <CardHeader>
+            <CardTitle>Project Details</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <dl className="space-y-2">
+              <div>
+                <dt className="text-sm font-medium text-gray-500">Created</dt>
+                <dd>{format(new Date(project.createdAt), "MMM d, yyyy")}</dd>
+              </div>
+              
+              {isAdmin && (
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Default TJM</dt>
+                  <dd>€{project.tjm || 0}</dd>
+                </div>
+              )}
+              
+              <div>
+                <dt className="text-sm font-medium text-gray-500">Tasks</dt>
+                <dd>
+                  {tasks.length} total ({doneTasks.length} completed)
+                </dd>
+              </div>
+            </dl>
+          </CardContent>
+        </Card>
         
-        <TabsContent value="list" className="mt-4">
+        {isAdmin && (
           <Card>
             <CardHeader>
-              <CardTitle>All Tasks</CardTitle>
-              <CardDescription>
-                {tasks.length} task{tasks.length !== 1 ? 's' : ''} in this project
-              </CardDescription>
+              <CardTitle>Progress</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {tasks.length > 0 ? (
-                  tasks.map(task => renderTaskCard(task))
-                ) : (
-                  <div className="text-center py-12 bg-gray-50 rounded-lg">
-                    <svg
-                      className="mx-auto h-12 w-12 text-gray-400"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      aria-hidden="true"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="1"
-                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                      />
-                    </svg>
-                    <h3 className="mt-2 text-sm font-medium text-gray-900">No tasks</h3>
-                    <p className="mt-1 text-sm text-gray-500">Get started by creating a new task.</p>
-                    {isAdmin && (
-                      <div className="mt-6">
-                        <Button
-                          onClick={() => setIsNewTaskOpen(true)}
-                          className="bg-blue-600 hover:bg-blue-700 text-white"
-                        >
-                          <Plus className="h-4 w-4 mr-2" />
-                          New Task
-                        </Button>
-                      </div>
-                    )}
+                <div>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-sm font-medium">Tasks Completed</span>
+                    <span className="text-sm font-medium">{Math.round((doneTasks.length / (tasks.length || 1)) * 100)}%</span>
                   </div>
-                )}
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-jira-green h-2 rounded-full" 
+                      style={{ width: `${Math.round((doneTasks.length / (tasks.length || 1)) * 100)}%` }}
+                    ></div>
+                  </div>
+                </div>
+                
+                <div>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-sm font-medium">Tasks In Progress</span>
+                    <span className="text-sm font-medium">{Math.round((inProgressTasks.length / (tasks.length || 1)) * 100)}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-jira-purple h-2 rounded-full" 
+                      style={{ width: `${Math.round((inProgressTasks.length / (tasks.length || 1)) * 100)}%` }}
+                    ></div>
+                  </div>
+                </div>
               </div>
             </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
-  );
-};
-
+        )}
+      </div>
+    </CardContent>
+  </Card>
+  
+  <Card>
+    <CardHeader className="bg-status-in-progress/30">
+      <CardTitle>In Progress</CardTitle>
+      <CardDescription>{inProgressTasks.length} tasks</CardDescription>
+    </CardHeader>
+    <CardContent className="pt-4">
+      <div className="space-y-3">
+        {inProgressTasks.length > 0 ? (
+          inProgressTasks.map(task => renderCollapsibleTaskCard(task))
+        ) : (
+          <p className="text-center py-4 text-gray-500">No tasks</p>
+        )}
+      </div>
+    </CardContent>
+  </Card>
+  
+  <Card>
+    <CardHeader className="bg-status-done/30">
+      <CardTitle>Done</CardTitle>
+      <CardDescription>{doneTasks.length} tasks</CardDescription>
+    </CardHeader>
+    <CardContent className="pt-4">
+      <div className="space-y-3">
+        {doneTasks.length > 0 ? (
+          doneTasks.map(task => renderCollapsibleTaskCard(task))
+        ) : (
+          <p className="text-center py-4 text-gray-500">No tasks</p>
+        )}
+      </div>
+    </CardContent>
+  </Card>
+</div>
 export default ProjectDetail;
