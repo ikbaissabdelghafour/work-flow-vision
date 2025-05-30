@@ -342,35 +342,22 @@ export const tasksApi = {
         description: task.description,
         status: task.status,
         project_id: task.projectId ? parseInt(task.projectId.toString()) : undefined,
-        team_id: task.teamId ? parseInt(task.teamId.toString()) : undefined,
         tjm: task.tjm,
         days_spent: task.daysSpent
       };
       
-      // Handle employee assignments properly
-      if (task.assignedEmployees && task.assignedEmployees.length > 0) {
-        // First, ensure we have a clean array of non-null values
-        const validEmployees = task.assignedEmployees.filter(
-          (emp): emp is NonNullable<typeof emp> => emp !== null && emp !== undefined
-        );
+      // Add team_id if the task is assigned to a team
+      if (task.teamId) {
+        apiData.team_id = parseInt(task.teamId.toString());
+      }
+      
+      // Handle employee assignments only if not assigned to team
+      if (!task.teamId && task.assignedEmployees && task.assignedEmployees.length > 0) {
+        // Convert string employee IDs to numbers
+        const employeeIds = task.assignedEmployees
+          .map(id => typeof id === 'string' ? parseInt(id) : id)
+          .filter(id => !isNaN(id));
         
-        // Then process each employee to extract IDs safely
-        const employeeIds: number[] = [];
-        
-        validEmployees.forEach(emp => {
-          // Handle object with id property
-          if (typeof emp === 'object' && emp !== null && 'id' in emp && emp.id !== null) {
-            const id = typeof emp.id === 'number' ? emp.id : parseInt(String(emp.id));
-            if (!isNaN(id)) employeeIds.push(id);
-          } 
-          // Handle string or number directly
-          else if (typeof emp === 'string' || typeof emp === 'number') {
-            const id = parseInt(String(emp));
-            if (!isNaN(id)) employeeIds.push(id);
-          }
-        });
-        
-        // Only set the employee_ids if we have valid IDs
         if (employeeIds.length > 0) {
           apiData.employee_ids = employeeIds;
         }
@@ -401,18 +388,50 @@ export const tasksApi = {
   },
   
   update: async (id: number, task: Partial<Task>, token: string): Promise<Task> => {
-    // Convert camelCase to snake_case for API
-    const apiData = {
-      title: task.title,
-      description: task.description,
-      status: task.status,
-      project_id: task.projectId ? parseInt(task.projectId) : undefined,
-      tjm: task.tjm,
-      days_spent: task.daysSpent
-    };
-    
-    const apiTask = await apiRequest<ApiTask>(`/tasks/${id}`, 'PUT', apiData, token);
-    return mapApiTaskToTask(apiTask);
+    try {
+      // Convert camelCase to snake_case for API
+      const apiData: Record<string, unknown> = {
+        title: task.title,
+        description: task.description,
+        status: task.status,
+        project_id: task.projectId ? parseInt(task.projectId.toString()) : undefined,
+        tjm: task.tjm,
+        days_spent: task.daysSpent
+      };
+      
+      // Add team_id if the task is assigned to a team
+      if (task.teamId) {
+        apiData.team_id = parseInt(task.teamId.toString());
+        // When assigning to a team, we should clear any individual employee assignments
+        apiData.employee_ids = [];
+      }
+      // Handle employee assignments only if not assigned to team
+      else if (task.assignedEmployees && task.assignedEmployees.length > 0) {
+        // Convert string employee IDs to numbers
+        const employeeIds = task.assignedEmployees
+          .map(id => typeof id === 'string' ? parseInt(id) : id)
+          .filter(id => !isNaN(id));
+        
+        if (employeeIds.length > 0) {
+          apiData.employee_ids = employeeIds;
+        }
+      }
+      
+      // Clean up undefined values
+      Object.keys(apiData).forEach(key => {
+        if (apiData[key] === undefined) {
+          delete apiData[key];
+        }
+      });
+      
+      console.log('Updating task with data:', JSON.stringify(apiData, null, 2));
+      
+      const apiTask = await apiRequest<ApiTask>(`/tasks/${id}`, 'PUT', apiData, token);
+      return mapApiTaskToTask(apiTask);
+    } catch (error) {
+      console.error('Error in tasksApi.update:', error);
+      throw error; // Re-throw to allow handling in the component
+    }
   },
   
   updateStatus: async (id: number, status: string, token: string): Promise<Task> => {

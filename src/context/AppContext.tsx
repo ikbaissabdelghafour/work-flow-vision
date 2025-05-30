@@ -117,47 +117,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsLoading(true);
     
     try {
-      // Prepare task data for API
-      const taskData = {
-        title: task.title,
-        description: task.description,
-        status: task.status,
-        project_id: parseInt(task.projectId),
-        tjm: task.tjm,
-        days_spent: task.daysSpent || 0,
-        // Include assigned employees if available
-        employee_ids: task.assignedEmployees || []
-      };
+      // Pass the task object directly to the API function
+      const createdTask = await tasksApi.create(task, token);
       
-      // Call the API to create the task
-      const createdTask = await tasksApi.create(taskData, token);
+      if (!createdTask) {
+        throw new Error("Failed to create task");
+      }
       
-      // Update local state with the new task
-      const newTask: Task = {
-        id: createdTask.id.toString(),
-        title: createdTask.title,
-        description: createdTask.description,
-        status: createdTask.status as TaskStatus,
-        projectId: createdTask.project_id ? createdTask.project_id.toString() : task.projectId,
-        tjm: createdTask.tjm,
-        daysSpent: createdTask.days_spent || task.daysSpent || 0,
-        createdAt: createdTask.created_at || new Date().toISOString(),
-        assignedEmployees: task.assignedEmployees || [],
-        teamId: task.teamId
-      };
-      
-      setTasks(prev => [...prev, newTask]);
+      // After task creation, refresh all tasks to get the latest data
+      const tasksData = await tasksApi.getAll(token);
+      setTasks(tasksData);
       
       // Refresh projects data to get updated associations
-      const projectsData = await projectsApi.getAll(token);
+      const projectsResponse = await projectsApi.getAll(token);
+      // Extract projects from the paginated response
+      const projectsData = Array.isArray(projectsResponse) 
+        ? projectsResponse 
+        : projectsResponse.projects || [];
       setProjects(projectsData);
       
       toast({
         title: "Task Created",
-        description: `Task "${newTask.title}" has been created.`
+        description: `Task "${createdTask.title}" has been created.`
       });
       
-      return newTask;
+      return createdTask;
     } catch (error) {
       console.error("Error creating task:", error);
       toast({
@@ -165,58 +149,130 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         description: "Failed to create task. Please try again.",
         variant: "destructive"
       });
+      return null;
     } finally {
       setIsLoading(false);
     }
   };
 
-  const updateTask = (taskId: string, updates: Partial<Task>) => {
-    setTasks(prev => 
-      prev.map(task => 
-        task.id === taskId ? { ...task, ...updates } : task
-      )
-    );
+  const updateTask = async (taskId: string, updates: Partial<Task>) => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
     
-    toast({
-      title: "Task Updated",
-      description: "The task has been updated successfully."
-    });
+    try {
+      // Get the existing task to merge with updates
+      const existingTask = tasks.find(t => t.id === taskId);
+      if (!existingTask) {
+        throw new Error("Task not found");
+      }
+      
+      // Combine existing task with updates
+      const mergedTask = { ...existingTask, ...updates };
+      
+      // Convert string ID to number for API
+      const numericId = parseInt(taskId);
+      if (isNaN(numericId)) throw new Error("Invalid task ID");
+      
+      // Call the API to update the task - passing the complete merged task
+      // The API layer will handle the conversion and team vs employee assignments
+      const updatedTask = await tasksApi.update(numericId, mergedTask, token);
+      
+      // Update local state with the updated task
+      setTasks(prev => 
+        prev.map(task => 
+          task.id === taskId ? { ...task, ...updatedTask } : task
+        )
+      );
+      
+      toast({
+        title: "Task Updated",
+        description: "The task has been updated successfully."
+      });
+      
+      return updatedTask;
+    } catch (error) {
+      console.error("Error updating task:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update task. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
-  const deleteTask = (taskId: string) => {
+  const deleteTask = async (taskId: string) => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
+    
     // Get the task to be deleted for reference
     const taskToDelete = tasks.find(t => t.id === taskId);
     if (!taskToDelete) return;
-
-    // Remove the task
-    setTasks(prev => prev.filter(task => task.id !== taskId));
     
-    // Update the associated project
-    setProjects(prev => 
-      prev.map(project => 
-        project.id === taskToDelete.projectId 
-          ? { ...project, tasks: project.tasks.filter(id => id !== taskId) } 
-          : project
-      )
-    );
-
-    toast({
-      title: "Task Deleted",
-      description: `Task "${taskToDelete.title}" has been deleted.`
-    });
+    try {
+      // Convert string ID to number for API
+      const numericId = parseInt(taskId);
+      if (isNaN(numericId)) throw new Error("Invalid task ID");
+      
+      // Call API to delete the task
+      await tasksApi.delete(numericId, token);
+      
+      // Remove the task from local state
+      setTasks(prev => prev.filter(task => task.id !== taskId));
+      
+      // Update the associated project
+      setProjects(prev => 
+        prev.map(project => 
+          project.id === taskToDelete.projectId 
+            ? { ...project, tasks: project.tasks.filter(id => id !== taskId) } 
+            : project
+        )
+      );
+      
+      toast({
+        title: "Task Deleted",
+        description: `Task "${taskToDelete.title}" has been deleted.`
+      });
+    } catch (error) {
+      console.error("Error deleting task:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete task. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
-  const updateTaskStatus = (taskId: string, status: TaskStatus) => {
-    setTasks(prev => 
-      prev.map(task => 
-        task.id === taskId ? { ...task, status } : task
-      )
-    );
+  const updateTaskStatus = async (taskId: string, status: TaskStatus) => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
     
-    toast({
-      title: "Status Updated",
-      description: `Task status changed to ${status}.`
-    });
+    try {
+      // Convert string ID to number for API
+      const numericId = parseInt(taskId);
+      if (isNaN(numericId)) throw new Error("Invalid task ID");
+      
+      // Call API to update the task status
+      await tasksApi.updateStatus(numericId, status, token);
+      
+      // Update local state
+      setTasks(prev => 
+        prev.map(task => 
+          task.id === taskId ? { ...task, status } : task
+        )
+      );
+      
+      toast({
+        title: "Status Updated",
+        description: `Task status changed to ${status}.`
+      });
+    } catch (error) {
+      console.error("Error updating task status:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update task status. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   // Project operations
@@ -366,17 +422,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     
     try {
       // Prepare employee data for API
-      const employeeData = {
+      const apiData: Record<string, unknown> = {
         name: employee.name,
         email: employee.email,
         role: employee.role,
-        team_id: parseInt(employee.teamId),
-        create_user: employee.createUser || false, // Flag to create a user account for this employee
-        avatar: employee.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${employee.name.toLowerCase().replace(/\s/g, '')}`
+        team_id: employee.teamId ? parseInt(employee.teamId) : undefined,
+        avatar: employee.avatar
       };
       
       // Call the API to create the employee
-      const createdEmployee = await employeesApi.create(employeeData, token);
+      const createdEmployee = await employeesApi.create(apiData, token);
       
       // Update local state with the new employee
       const newEmployee: Employee = {

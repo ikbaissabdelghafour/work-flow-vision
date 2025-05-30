@@ -436,26 +436,86 @@ const ProjectDetail: React.FC = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="assignedEmployees">Assign Employees</Label>
-                  <select
-                    id="assignedEmployees"
-                    multiple
-                    className="flex h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    value={newTask.assignedEmployees}
-                    onChange={(e) => {
-                      const selectedOptions = Array.from(e.target.selectedOptions, option => option.value);
-                      setNewTask(prev => ({ 
-                        ...prev, 
-                        assignedEmployees: selectedOptions 
-                      }));
-                    }}
-                  >
-                    {teamEmployees.map(employee => (
-                      <option key={employee.id} value={employee.id}>
-                        {employee.name} - {employee.role}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-gray-500">Hold Ctrl/Cmd to select multiple employees</p>
+                  
+                  <div className="mb-2">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="assignAllEmployees"
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            // Select all team members' IDs
+                            const allTeamMemberIds = teamEmployees.map(emp => emp.id);
+                            setNewTask(prev => ({ 
+                              ...prev, 
+                              assignedEmployees: allTeamMemberIds
+                            }));
+                          } else {
+                            // Clear all selections
+                            setNewTask(prev => ({
+                              ...prev,
+                              assignedEmployees: []
+                            }));
+                          }
+                        }}
+                        checked={teamEmployees.length > 0 && newTask.assignedEmployees.length === teamEmployees.length && teamEmployees.every(emp => newTask.assignedEmployees.includes(emp.id))}
+                      />
+                      <Label htmlFor="assignAllEmployees" className="font-medium text-sm">
+                        Assign to all team members
+                      </Label>
+                    </div>
+                    {teamEmployees.length > 0 && 
+                     newTask.assignedEmployees.length === teamEmployees.length && 
+                     teamEmployees.every(emp => newTask.assignedEmployees.includes(emp.id)) && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        This task will be assigned to all team members
+                      </p>
+                    )}
+                  </div>
+                  
+                  <div className="border rounded-md p-3 max-h-60 overflow-y-auto">
+                      {teamEmployees.length > 0 ? (
+                        <div className="space-y-2">
+                          {teamEmployees.map(employee => (
+                            <div key={employee.id} className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                id={`employee-${employee.id}`}
+                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                checked={newTask.assignedEmployees.includes(employee.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    // Add employee to selection
+                                    setNewTask(prev => ({
+                                      ...prev,
+                                      assignedEmployees: [...prev.assignedEmployees, employee.id]
+                                    }));
+                                  } else {
+                                    // Remove employee from selection
+                                    setNewTask(prev => ({
+                                      ...prev,
+                                      assignedEmployees: prev.assignedEmployees.filter(id => id !== employee.id)
+                                    }));
+                                  }
+                                }}
+                              />
+                              <label 
+                                htmlFor={`employee-${employee.id}`}
+                                className="text-sm font-medium text-gray-700 flex-1"
+                              >
+                                {employee.name}
+                              </label>
+                              <span className="text-xs text-gray-500">{employee.role}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500 text-center py-4">
+                          No employees available in this team
+                        </p>
+                      )}
+                    </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -528,26 +588,90 @@ const ProjectDetail: React.FC = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit-assignedEmployees">Assign Employees</Label>
-                  <select
-                    id="edit-assignedEmployees"
-                    multiple
-                    className="flex h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    value={selectedTask.assignedEmployees}
-                    onChange={(e) => {
-                      const selectedOptions = Array.from(e.target.selectedOptions, option => option.value);
-                      setSelectedTask(prev => prev ? { 
-                        ...prev, 
-                        assignedEmployees: selectedOptions 
-                      } : null);
-                    }}
-                  >
-                    {teamEmployees.map(employee => (
-                      <option key={employee.id} value={employee.id}>
-                        {employee.name} - {employee.role}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-gray-500">Hold Ctrl/Cmd to select multiple employees</p>
+                  
+                  <div className="mb-2">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="edit-assignAllEmployees"
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        onChange={(e) => {
+                          if (!selectedTask) return;
+                          
+                          if (e.target.checked) {
+                            // Select all team members' IDs
+                            const allTeamMemberIds = teamEmployees.map(emp => emp.id);
+                            setSelectedTask({
+                              ...selectedTask,
+                              assignedEmployees: allTeamMemberIds
+                            });
+                          } else {
+                            // Clear all selections
+                            setSelectedTask({
+                              ...selectedTask,
+                              assignedEmployees: []
+                            });
+                          }
+                        }}
+                        checked={selectedTask && teamEmployees.length > 0 && selectedTask.assignedEmployees.length === teamEmployees.length && teamEmployees.every(emp => selectedTask.assignedEmployees.includes(emp.id))}
+                      />
+                      <Label htmlFor="edit-assignAllEmployees" className="font-medium text-sm">
+                        Assign to all team members
+                      </Label>
+                    </div>
+                    {selectedTask && teamEmployees.length > 0 && 
+                     selectedTask.assignedEmployees.length === teamEmployees.length && 
+                     teamEmployees.every(emp => selectedTask.assignedEmployees.includes(emp.id)) && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        This task will be assigned to all team members
+                      </p>
+                    )}
+                  </div>
+                  
+                  <div className="border rounded-md p-3 max-h-60 overflow-y-auto">
+                    {teamEmployees.length > 0 ? (
+                      <div className="space-y-2">
+                        {teamEmployees.map(employee => (
+                          <div key={employee.id} className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              id={`edit-employee-${employee.id}`}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              checked={selectedTask?.assignedEmployees.includes(employee.id)}
+                              onChange={(e) => {
+                                if (!selectedTask) return;
+                                
+                                if (e.target.checked) {
+                                  // Add employee to selection
+                                  setSelectedTask({
+                                    ...selectedTask,
+                                    assignedEmployees: [...selectedTask.assignedEmployees, employee.id]
+                                  });
+                                } else {
+                                  // Remove employee from selection
+                                  setSelectedTask({
+                                    ...selectedTask,
+                                    assignedEmployees: selectedTask.assignedEmployees.filter(id => id !== employee.id)
+                                  });
+                                }
+                              }}
+                            />
+                            <label 
+                              htmlFor={`edit-employee-${employee.id}`}
+                              className="text-sm font-medium text-gray-700 flex-1"
+                            >
+                              {employee.name}
+                            </label>
+                            <span className="text-xs text-gray-500">{employee.role}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 text-center py-4">
+                        No employees available in this team
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
